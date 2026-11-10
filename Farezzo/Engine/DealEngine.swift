@@ -329,7 +329,7 @@ struct DealEngine {
       let cheaper = chosen.filter { (calendar[$0.day] ?? 0) <= basePrice * 1.05 }
       if !cheaper.isEmpty { chosen = cheaper.prefix(maxFlexibleDates) }
     }
-    return chosen.map(\.day).sorted()
+    return chosen.map { $0.day }.sorted()
   }
 
   /// Pairs the cheapest one-way tickets each way into round trips.

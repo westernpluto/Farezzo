@@ -20,7 +20,7 @@ final class DealEngineTests: XCTestCase {
 
   func testNaiveTimesKeepTheLocalClock() {
     let date = Fmt.naive("2026-12-01 08:05")!
-    XCTAssertEqual(Fmt.time.timeZone.identifier, "UTC")
+    XCTAssertEqual(Fmt.time.timeZone.secondsFromGMT(), 0)
     XCTAssertEqual(Fmt.utcCalendar.component(.hour, from: date), 8)
     XCTAssertEqual(Fmt.naive("2026-12-01T08:05:00+03:00"), date)
     XCTAssertEqual(Fmt.naive("2026-12-01T08:05:00"), date)

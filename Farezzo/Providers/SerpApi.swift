@@ -243,7 +243,7 @@ struct SerpApi {
     let json = try await search(params)
     var updated = hotel
     let nights = max(1, hotel.nights)
-    var sources: [String: HotelSourcePrice] = Dictionary(uniqueKeysWithValues: hotel.sources.map { ($0.source, $0) })
+    var sources: [String: HotelSourcePrice] = Dictionary(hotel.sources.map { ($0.source, $0) }, uniquingKeysWith: { first, _ in first })
     for item in json["featured_prices"].array + json["prices"].array {
       guard let source = Self.parseSource(item, nights: nights) else { continue }
       if let existing = sources[source.source], (existing.total ?? .infinity) <= (source.total ?? .infinity),

@@ -39,6 +39,11 @@ struct APIKeys: Sendable, Equatable {
   var serpApi: String?
   var duffel: String?
   var travelpayouts: String?
+  /// No-key mode: read Google Flights and Booking.com's pages on the iPhone when there's no
+  /// SerpApi key. On unless turned off in Settings.
+  var webMode = true
+
+  static let webModeDefaultsKey = "webMode"
 
   static let serpAccount = "serpapi"
   static let duffelAccount = "duffel"
@@ -48,10 +53,12 @@ struct APIKeys: Sendable, Equatable {
     APIKeys(
       serpApi: Keychain.get(serpAccount),
       duffel: Keychain.get(duffelAccount),
-      travelpayouts: Keychain.get(travelpayoutsAccount))
+      travelpayouts: Keychain.get(travelpayoutsAccount),
+      webMode: UserDefaults.standard.object(forKey: webModeDefaultsKey) as? Bool ?? true)
   }
 
-  var hasAnyFlightSource: Bool { serpApi != nil || duffel != nil || travelpayouts != nil }
-  var hasHotelSource: Bool { serpApi != nil }
-  var sourceCount: Int { [serpApi, duffel, travelpayouts].compactMap { $0 }.count }
+  var usesWebMode: Bool { serpApi == nil && webMode }
+  var hasAnyFlightSource: Bool { serpApi != nil || duffel != nil || travelpayouts != nil || webMode }
+  var hasHotelSource: Bool { serpApi != nil || webMode }
+  var sourceCount: Int { [serpApi, duffel, travelpayouts].compactMap { $0 }.count + (usesWebMode ? 1 : 0) }
 }

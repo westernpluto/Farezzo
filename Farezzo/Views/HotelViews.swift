@@ -165,7 +165,11 @@ struct HotelDetail: View {
           Button { openURL(website) } label: { Label("Hotel website", systemImage: "globe") }.buttonStyle(.bordered)
         }
         if let google = hotel.googleURL {
-          Button { openURL(google) } label: { Label("Google Hotels", systemImage: "magnifyingglass") }.buttonStyle(.bordered)
+          let isGoogle = google.host?.contains("google") ?? false
+          Button { openURL(google) } label: {
+            Label(isGoogle ? "Google Hotels" : "All results", systemImage: "magnifyingglass")
+          }
+          .buttonStyle(.bordered)
         }
       }
     }

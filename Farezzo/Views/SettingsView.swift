@@ -6,6 +6,7 @@ struct SettingsView: View {
   @State private var travelpayouts = Keychain.get(APIKeys.travelpayoutsAccount) ?? ""
   @State private var serpStatus: String?
   @State private var checking = false
+  @AppStorage(APIKeys.webModeDefaultsKey) private var webMode = true
   @AppStorage("currency") private var currency = Locale.current.currency?.identifier ?? "USD"
   @AppStorage("region") private var region = (Locale.current.region?.identifier ?? "US").lowercased()
 
@@ -14,6 +15,16 @@ struct SettingsView: View {
 
   var body: some View {
     Form {
+      Section {
+        Toggle(isOn: $webMode) {
+          Label("No-key mode", systemImage: "key.slash")
+        }
+      } header: {
+        Text("No sign-up needed")
+      } footer: {
+        Text("Without a SerpApi key, Farezzo reads Google Flights and Booking.com's own pages on this iPhone, like a browser. It needs no account, but now and then a site may ask you to confirm you're human, and a site redesign can break it until the app is updated. It also skips the other-regions check, which needs SerpApi's servers abroad. Reading pages this way isn't allowed by those sites' terms of use.")
+      }
+
       Section {
         keyField("SerpApi key", text: $serpApi, account: APIKeys.serpAccount)
         if let serpStatus { Text(serpStatus).font(.caption).foregroundStyle(.secondary) }
@@ -25,16 +36,16 @@ struct SettingsView: View {
         .disabled(serpApi.isEmpty || checking)
         Link("Get a SerpApi key", destination: URL(string: "https://serpapi.com/users/sign_up")!)
       } header: {
-        Text("Google Flights & Google Hotels")
+        Text("Google Flights & Google Hotels (optional)")
       } footer: {
-        Text("The widest source: almost every airline and booking site. Each search uses one search from your SerpApi plan (the free plan includes a monthly allowance).")
+        Text("Optional: replaces no-key mode with SerpApi's servers, which are more dependable and add every booking site's hotel prices and other regions' fares. The widest source: almost every airline and booking site. Each search uses one search from your SerpApi plan (the free plan includes a monthly allowance).")
       }
 
       Section {
         keyField("Duffel access token", text: $duffel, account: APIKeys.duffelAccount)
         Link("Get a Duffel token", destination: URL(string: "https://app.duffel.com/join")!)
       } header: {
-        Text("Airlines direct")
+        Text("Airlines direct (optional, for businesses)")
       } footer: {
         Text("Live fares from airlines' own systems, including some not sold by travel agencies. Searching is free. Use a live token (duffel_live_…); test tokens only return a sample airline.")
       }
@@ -43,7 +54,7 @@ struct SettingsView: View {
         keyField("Travelpayouts API token", text: $travelpayouts, account: APIKeys.travelpayoutsAccount)
         Link("Get a Travelpayouts token", destination: URL(string: "https://www.travelpayouts.com/developers/api")!)
       } header: {
-        Text("Fare calendar & budget fares")
+        Text("Fare calendar & budget fares (optional)")
       } footer: {
         Text("Free. Powers the cheapest-day calendar and adds recent low fares found on Aviasales, including low-cost airlines.")
       }

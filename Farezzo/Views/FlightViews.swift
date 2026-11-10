@@ -12,7 +12,8 @@ struct FlightRow: View {
         if let inbound = offer.inbound {
           LegLine(leg: inbound)
         } else if offer.isRoundTrip {
-          Text("Return: choose on the next screen").font(.caption).foregroundStyle(.secondary)
+          Text(offer.serpReturnToken != nil ? "Return: choose on the next screen" : "Return: pick on Google Flights")
+            .font(.caption).foregroundStyle(.secondary)
         }
         Text(airlinesText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         TagRow(tags: offer.tags)
@@ -87,6 +88,11 @@ struct FlightDetail: View {
         LegCard(title: "Return", leg: inbound)
       } else if offer.serpReturnToken != nil {
         returnChooser
+      } else if current.isRoundTrip {
+        SectionCard("Return flight") {
+          Text("The price is the lowest round trip with this outbound flight. Open Google Flights below, select this flight, and pick your return there.")
+            .font(.callout).foregroundStyle(.secondary)
+        }
       }
 
       if !current.notes.isEmpty {
@@ -202,7 +208,7 @@ struct LegCard: View {
             }
           }
         }
-        if index < leg.layovers.count {
+        if index < leg.layovers.count && leg.unlistedStops == 0 {
           let layover = leg.layovers[index]
           Label("\(Fmt.duration(layover.minutes)) layover in \(layover.name.isEmpty ? layover.code : layover.name)\(layover.overnight ? " · overnight" : "")",
                 systemImage: "clock")
@@ -212,8 +218,16 @@ struct LegCard: View {
         }
       }
       if leg.unlistedStops > 0 {
-        Label("\(leg.unlistedStops) connection\(leg.unlistedStops == 1 ? "" : "s") (airports not listed)", systemImage: "arrow.triangle.branch")
-          .font(.caption).foregroundStyle(.secondary)
+        if leg.layovers.isEmpty {
+          Label("\(leg.unlistedStops) connection\(leg.unlistedStops == 1 ? "" : "s") (airports not listed)", systemImage: "arrow.triangle.branch")
+            .font(.caption).foregroundStyle(.secondary)
+        } else {
+          ForEach(Array(leg.layovers.enumerated()), id: \.offset) { _, layover in
+            Label("\(Fmt.duration(layover.minutes)) layover at \(layover.name)\(layover.overnight ? " · overnight" : "")", systemImage: "clock")
+              .font(.caption)
+              .foregroundStyle(layover.minutes < 60 || layover.minutes > 360 ? Color.orange : Color.secondary)
+          }
+        }
       }
       if let departs = leg.departs {
         Text(Fmt.naiveDayShort.string(from: departs) + " · times are local").font(.caption2).foregroundStyle(.tertiary)

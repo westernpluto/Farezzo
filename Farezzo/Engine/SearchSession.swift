@@ -21,6 +21,8 @@ final class SearchSession {
   var log: [String] = []
   var warnings: [String] = []
   var serpSearches = 0
+  /// A site asked to confirm a person is there (no-key mode): the page to show them.
+  var humanCheck: URL?
 
   init(query: SearchQuery) {
     self.query = query
@@ -45,7 +47,7 @@ final class SearchSession {
   func run() async {
     phase = .searching
     finishedSteps = 0
-    flights = []; hotels = []; packages = []; log = []; warnings = []; insights = nil; serpSearches = 0
+    flights = []; hotels = []; packages = []; log = []; warnings = []; insights = nil; serpSearches = 0; humanCheck = nil
     let engine = DealEngine(keys: APIKeys.load())
     let query = self.query
     let report: DealEngine.Report = { [weak self] message in
@@ -68,6 +70,7 @@ final class SearchSession {
       log += f.log
       warnings += f.warnings
       serpSearches += f.serpSearches
+      humanCheck = humanCheck ?? f.humanCheck
     }
     if let h {
       hotels = h.hotels
@@ -75,6 +78,7 @@ final class SearchSession {
       log += h.log
       warnings += h.warnings
       serpSearches += h.serpSearches
+      humanCheck = humanCheck ?? h.humanCheck
     }
     if query.mode == .package {
       packages = DealEngine.packages(flights: flights, hotels: hotels, currency: query.currency)

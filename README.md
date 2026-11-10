@@ -5,7 +5,20 @@ packages and **hotels**. It is built for the **iPhone Duo**: folded it's a singl
 unfolded, results and the selected deal sit side by side. Held partly folded, the two columns
 meet at the fold, so nothing runs across the crease.
 
-## Where the prices come from
+## No-key mode (no sign-up)
+
+Out of the box Farezzo needs no accounts. Without a SerpApi key it reads **Google Flights** (flights)
+and **Booking.com** (stays) the way a browser would: the pages load in a hidden web view on the
+iPhone and the results are read off them, two pages at a time. If a site asks you to confirm
+you're human, the results screen offers to open the page so you can tap through it. Two caveats:
+reading pages this way isn't allowed by those sites' terms of use, and a site redesign can break
+it until the app is updated. It can be turned off in Settings.
+
+Keys are optional upgrades: SerpApi replaces no-key mode with more dependable servers (plus every
+booking site's hotel prices and other regions' fares), and Travelpayouts adds the cheapest-day
+calendar and low-cost-airline fares.
+
+## Where the prices come from (with keys)
 
 | Source | Covers | Cost |
 | --- | --- | --- |

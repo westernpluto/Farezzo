@@ -140,6 +140,7 @@ enum Provider: String, Codable, Hashable, CaseIterable {
   case duffel = "Duffel"
   case aviasales = "Aviasales"
   case googleHotels = "Google Hotels"
+  case booking = "Booking.com"
 }
 
 enum DealTag: String, Codable, Hashable, CaseIterable {

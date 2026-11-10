@@ -196,4 +196,87 @@ final class DealEngineTests: XCTestCase {
     XCTAssertEqual(deals.first?.total, 800)
     XCTAssertTrue(deals.first?.tags.contains(.cheapest) ?? false)
   }
+
+  // MARK: No-key mode
+
+  func testGoogleFlightsPageRowParse() throws {
+    let day = try XCTUnwrap(Fmt.ymd.date(from: "2026-12-01"))
+    let label = "From 512 US dollars round trip total. 1 stop flight with Icelandair. Leaves John F. Kennedy International Airport at 8:00\u{202F}PM on Tuesday, December 1 and arrives at Heathrow Airport at 11:30\u{202F}AM on Wednesday, December 2. Total duration 10 hr 30 min. Layover (1 of 1) is a 1 hr 15 min layover at Keflavík International Airport in Reykjavík. Select flight"
+    let text = "8:00 PM – 11:30 AM+1\nIcelandair\n10 hr 30 min\nJFK–LHR\n1 stop\n$512\nround trip"
+    let parsed = try XCTUnwrap(GoogleFlightsWeb.parseItem(label: label, text: text, logo: nil, searchDate: day))
+    XCTAssertEqual(parsed.price, 512)
+    XCTAssertEqual(parsed.leg.stops, 1)
+    XCTAssertEqual(parsed.leg.fromCode, "JFK")
+    XCTAssertEqual(parsed.leg.toCode, "LHR")
+    XCTAssertEqual(parsed.leg.durationMinutes, 630)
+    XCTAssertEqual(parsed.leg.layovers.first?.minutes, 75)
+    XCTAssertEqual(parsed.leg.airlines, ["Icelandair"])
+    let departs = try XCTUnwrap(parsed.leg.departs)
+    XCTAssertEqual(Fmt.utcCalendar.component(.hour, from: departs), 20)
+    XCTAssertEqual(Fmt.utcCalendar.component(.year, from: departs), 2026)
+    XCTAssertEqual(Fmt.utcCalendar.component(.day, from: try XCTUnwrap(parsed.leg.arrives)), 2)
+  }
+
+  func testGoogleFlightsNonstopAndYearRollover() throws {
+    let day = try XCTUnwrap(Fmt.ymd.date(from: "2026-12-31"))
+    let label = "From 1,204 US dollars. Nonstop flight with Delta. Leaves Los Angeles International Airport at 10:15 PM on Thursday, December 31 and arrives at Daniel K. Inouye International Airport at 2:05 AM on Friday, January 1. Total duration 6 hr 50 min."
+    let parsed = try XCTUnwrap(GoogleFlightsWeb.parseItem(label: label, text: "LAX–HNL", logo: nil, searchDate: day))
+    XCTAssertEqual(parsed.price, 1204)
+    XCTAssertEqual(parsed.leg.stops, 0)
+    XCTAssertEqual(Fmt.utcCalendar.component(.year, from: try XCTUnwrap(parsed.leg.arrives)), 2027)
+  }
+
+  func testGoogleFlightsAddressEncodesTheSearch() throws {
+    let request = SerpApi.FlightRequest(origins: ["JFK", "EWR"], destinations: ["LHR"], depart: Fmt.ymd.date(from: "2026-12-01")!,
+                                        ret: Fmt.ymd.date(from: "2026-12-08")!, adults: 2, children: 0, cabin: .business,
+                                        maxStops: nil, currency: "USD", region: "us", deep: false)
+    var base64 = GoogleFlightsWeb.tfs(request).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+    while base64.count % 4 != 0 { base64 += "=" }
+    let bytes = try XCTUnwrap(Data(base64Encoded: base64))
+    let text = String(decoding: bytes, as: UTF8.self)
+    XCTAssertTrue(text.contains("2026-12-01"))
+    XCTAssertTrue(text.contains("2026-12-08"))
+    XCTAssertTrue(text.contains("JFK") && text.contains("EWR") && text.contains("LHR"))
+    XCTAssertFalse(GoogleFlightsWeb.tfs(request).contains("="))
+    // Trip type 1 (round trip) is the last field: tag 19 << 3 = 152 → varint 0x98 0x01, then 1.
+    XCTAssertEqual(Array(bytes.suffix(3)), [0x98, 0x01, 0x01])
+  }
+
+  func testBookingPageParse() throws {
+    var query = SearchQuery()
+    query.mode = .hotels
+    query.destination = Place(code: "LIS", name: "Lisbon", kind: .city)
+    query.returnDate = Fmt.addDays(3, to: query.departDate)
+    let page = BookingWeb.parsePage(try json(#"""
+    {"items": [
+      {"name": "Casa Azul", "link": "https://www.booking.com/hotel/pt/casa-azul.html?x=1", "price": "US$540",
+       "taxes": "+US$60 taxes and charges", "review": "Scored 8.8\n8.8\nFabulous\n1,234 reviews", "stars": "4 out of 5",
+       "image": "https://cf.bstatic.com/x.jpg", "text": "Casa Azul\nFree cancellation\nUS$540"},
+      {"name": "Loft", "link": "https://www.booking.com/hotel/pt/loft.html", "price": "US$300",
+       "taxes": "Includes taxes and charges", "review": null, "stars": null, "image": null, "text": "Entire apartment"}
+    ]}
+    """#), query: query, url: URL(string: "https://www.booking.com")!)
+    XCTAssertEqual(page.hotels.count, 2)
+    let casa = try XCTUnwrap(page.hotels.first)
+    XCTAssertEqual(casa.total, 600)
+    XCTAssertEqual(casa.rating ?? 0, 4.4, accuracy: 0.001)
+    XCTAssertEqual(casa.reviews, 1234)
+    XCTAssertEqual(casa.stars, 4)
+    XCTAssertTrue(casa.tags.contains(.freeCancellation))
+    XCTAssertEqual(page.hotels[1].total, 300)
+    XCTAssertTrue(page.hotels[1].tags.contains(.vacationRental))
+  }
+
+  func testNoKeyModeReplacesSerpApiWhenThereIsNoKey() {
+    let keys = APIKeys(serpApi: nil, duffel: nil, travelpayouts: nil, webMode: true)
+    XCTAssertTrue(keys.usesWebMode)
+    XCTAssertTrue(keys.hasAnyFlightSource && keys.hasHotelSource)
+    var query = SearchQuery()
+    query.mode = .package
+    XCTAssertEqual(DealEngine.estimatedSerpSearches(query, keys: keys), 0)
+    XCTAssertGreaterThan(DealEngine.estimatedPageReads(query, keys: keys), 0)
+    let withKey = APIKeys(serpApi: "k", duffel: nil, travelpayouts: nil, webMode: true)
+    XCTAssertFalse(withKey.usesWebMode)
+    XCTAssertEqual(DealEngine.estimatedPageReads(query, keys: withKey), 0)
+  }
 }

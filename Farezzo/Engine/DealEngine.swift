@@ -28,6 +28,7 @@ struct DealEngine {
     var log: [String] = []
     var warnings: [String] = []
     var serpSearches = 0
+    var humanCheck: URL?
   }
 
   struct HotelResult {
@@ -36,9 +37,42 @@ struct DealEngine {
     var log: [String] = []
     var warnings: [String] = []
     var serpSearches = 0
+    var humanCheck: URL?
   }
 
   typealias Report = @Sendable (String) async -> Void
+
+  /// Where Google Flights results come from: SerpApi with a key, or the page itself (no-key mode).
+  enum FlightsBackend {
+    case serp(SerpApi)
+    case web
+
+    var isSerp: Bool { if case .serp = self { return true } else { return false } }
+
+    func flights(_ request: SerpApi.FlightRequest) async throws -> SerpApi.FlightPage {
+      switch self {
+      case .serp(let serp): return try await serp.flights(request)
+      case .web: return try await GoogleFlightsWeb.flights(request)
+      }
+    }
+
+    static func make(_ keys: APIKeys) -> FlightsBackend? {
+      if let key = keys.serpApi { return .serp(SerpApi(key: key)) }
+      return keys.webMode ? .web : nil
+    }
+  }
+
+  /// Pages no-key mode reads for a query (when there's no SerpApi key).
+  static func estimatedPageReads(_ query: SearchQuery, keys: APIKeys) -> Int {
+    guard keys.serpApi == nil, keys.webMode else { return 0 }
+    var count = 0
+    if query.mode.needsFlights {
+      count += 1 + min(query.flexDays * 2, maxFlexibleDates)
+      if query.trySplitTickets && query.isRoundTrip { count += 2 }
+    }
+    if query.mode.needsHotels { count += 2 }
+    return count
+  }
 
   /// SerpApi searches a query uses (the other sources are free).
   static func estimatedSerpSearches(_ query: SearchQuery, keys: APIKeys) -> Int {
@@ -71,6 +105,7 @@ struct DealEngine {
     var serpSearches = 0
     var log: String?
     var warning: String?
+    var humanCheck: URL?
   }
 
   func flights(_ query: SearchQuery, report: @escaping Report) async -> FlightResult {
@@ -116,8 +151,7 @@ struct DealEngine {
     // 3. Everything at once.
     await report("Searching \(keys.sourceCount) source\(keys.sourceCount == 1 ? "" : "s")…")
     let jobs = await withTaskGroup(of: Job.self, returning: [Job].self) { group in
-      if let key = keys.serpApi {
-        let serp = SerpApi(key: key)
+      if let serp = FlightsBackend.make(keys) {
         func request(depart: Date, ret: Date?, region: String) -> SerpApi.FlightRequest {
           SerpApi.FlightRequest(origins: origins, destinations: destinations, depart: depart, ret: ret,
                                 adults: query.adults, children: query.children, cabin: query.cabin,
@@ -144,7 +178,8 @@ struct DealEngine {
           }
           group.addTask { await Self.serpJob(.splitBack, serp, back, label: "Google Flights one-way back", report: report) }
         }
-        if query.checkOtherMarkets {
+        // Other countries' Google Flights needs SerpApi's servers in those countries.
+        if query.checkOtherMarkets && serp.isSerp {
           for market in Self.markets(excluding: query.region) {
             group.addTask {
               await Self.serpJob(.market(market), serp, request(depart: query.departDate, ret: query.returnDate, region: market),
@@ -220,6 +255,7 @@ struct DealEngine {
     let primaryDestinations = Airports.primaryCodes(for: destination)
     for job in jobs {
       result.serpSearches += job.serpSearches
+      if result.humanCheck == nil { result.humanCheck = job.humanCheck }
       if let log = job.log { result.log.append(log) }
       if let warning = job.warning { result.warnings.append(warning) }
       var batch = job.offers
@@ -262,15 +298,18 @@ struct DealEngine {
     return result
   }
 
-  private static func serpJob(_ kind: Job.Kind, _ serp: SerpApi, _ request: SerpApi.FlightRequest, label: String,
+  private static func serpJob(_ kind: Job.Kind, _ serp: FlightsBackend, _ request: SerpApi.FlightRequest, label: String,
                               report: Report) async -> Job {
-    var job = Job(kind: kind, serpSearches: 1)
+    var job = Job(kind: kind, serpSearches: serp.isSerp ? 1 : 0)
     do {
       let page = try await serp.flights(request)
       job.offers = page.offers
       job.insights = page.insights
       job.googleURL = page.googleURL
-      job.log = "\(label): \(page.offers.count) options"
+      job.log = "\(label)\(serp.isSerp ? "" : " (read on this iPhone)"): \(page.offers.count) options"
+    } catch WebReadError.needsHuman(let url) {
+      job.humanCheck = url
+      job.warning = "\(label): Google asked to confirm you're human."
     } catch {
       job.warning = "\(label): \(error.localizedDescription)"
     }
@@ -419,7 +458,8 @@ struct DealEngine {
   func hotels(_ query: SearchQuery, report: @escaping Report) async -> HotelResult {
     var result = HotelResult()
     guard let key = keys.serpApi else {
-      result.warnings.append("Hotel prices come from Google Hotels: add a SerpApi key in Settings.")
+      if keys.webMode { return await webHotels(query, report: report) }
+      result.warnings.append("Turn on no-key mode or add a SerpApi key in Settings to see stays.")
       return result
     }
     let serp = SerpApi(key: key)
@@ -492,6 +532,59 @@ struct DealEngine {
     }
 
     result.hotels = Self.rankHotels(hotels)
+    if let best = result.hotels.first {
+      result.log.insert("Lowest stay: \(Fmt.money(best.total, query.currency)) of \(result.hotels.count) places", at: 0)
+    }
+    return result
+  }
+
+  /// No-key mode: Booking.com's results, read on this iPhone (cheapest first, then most popular).
+  private func webHotels(_ query: SearchQuery, report: @escaping Report) async -> HotelResult {
+    var result = HotelResult()
+    await report("Reading Booking.com…")
+    let orders: [(BookingWeb.Order, String)] = [(.lowestPrice, "lowest price"), (.popular, "top picks")]
+    let pages = await withTaskGroup(of: (SerpApi.HotelPage?, String, Error?).self,
+                                    returning: [(SerpApi.HotelPage?, String, Error?)].self) { group in
+      for (order, label) in orders {
+        group.addTask {
+          do {
+            let page = try await BookingWeb.hotels(query, order: order)
+            await report("Booking.com: \(label) done")
+            return (page, label, nil)
+          } catch {
+            return (nil, label, error)
+          }
+        }
+      }
+      var pages: [(SerpApi.HotelPage?, String, Error?)] = []
+      for await page in group { pages.append(page) }
+      return pages
+    }
+    var merged: [String: HotelOffer] = [:]
+    for (page, label, error) in pages {
+      if let error {
+        if let webError = error as? WebReadError, case .needsHuman(let url) = webError {
+          result.humanCheck = url
+          result.warnings.append("Booking.com (\(label)) asked to confirm you're human.")
+        } else {
+          result.warnings.append("Booking.com (\(label)): \(error.localizedDescription)")
+        }
+        continue
+      }
+      guard let page else { continue }
+      if result.googleURL == nil { result.googleURL = page.googleURL }
+      result.log.append("Booking.com (\(label), read on this iPhone): \(page.hotels.count) places")
+      for hotel in page.hotels where (merged[hotel.id]?.total ?? .infinity) > hotel.total {
+        merged[hotel.id] = hotel
+      }
+    }
+    let hotels = merged.values.filter { hotel in
+      (query.minRating == 0 || (hotel.rating ?? 0) >= query.minRating)
+        && (query.minStars < 2 || hotel.tags.contains(.vacationRental) || (hotel.stars ?? 0) >= query.minStars)
+        && (!query.freeCancellation || hotel.tags.contains(.freeCancellation))
+        && (query.includeVacationRentals || !hotel.tags.contains(.vacationRental))
+    }
+    result.hotels = Self.rankHotels(Array(hotels))
     if let best = result.hotels.first {
       result.log.insert("Lowest stay: \(Fmt.money(best.total, query.currency)) of \(result.hotels.count) places", at: 0)
     }

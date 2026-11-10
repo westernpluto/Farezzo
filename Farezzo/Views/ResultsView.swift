@@ -198,9 +198,27 @@ struct ResultsView: View {
 
 struct ResultsHeader: View {
   let session: SearchSession
+  @State private var checking: CheckPage?
+
+  struct CheckPage: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
+      if let url = session.humanCheck, session.phase == .done {
+        VStack(alignment: .leading, spacing: 6) {
+          Label("\(url.host?.replacingOccurrences(of: "www.", with: "") ?? "A site") wants to check you're human", systemImage: "person.badge.shield.checkmark")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.orange)
+          Text("Some results are missing until you do. It's quick and only needed now and then.")
+            .font(.caption).foregroundStyle(.secondary)
+          Button("Continue on the site") { checking = CheckPage(url: url) }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+        }
+      }
       if session.phase == .searching {
         HStack(spacing: 10) {
           ProgressView()
@@ -235,6 +253,9 @@ struct ResultsHeader: View {
       }
     }
     .padding(.vertical, 4)
+    .sheet(item: $checking) { page in
+      HumanCheckSheet(url: page.url) { Task { await session.run() } }
+    }
   }
 }
 

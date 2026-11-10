@@ -142,7 +142,7 @@ struct SearchView: View {
           NavigationLink {
             SettingsView()
           } label: {
-            Label("Add your API keys to start searching", systemImage: "key.fill").foregroundStyle(.orange)
+            Label("Turn on no-key mode or add a key to start searching", systemImage: "key.fill").foregroundStyle(.orange)
           }
         } footer: {
           Text("Farezzo gets prices from Google Flights & Hotels (SerpApi), airlines directly (Duffel) and Aviasales. Keys stay on this iPhone.")
@@ -205,8 +205,11 @@ struct SearchView: View {
       Text("Deal hunting")
     } footer: {
       let searches = DealEngine.estimatedSerpSearches(query, keys: keys)
+      let pages = DealEngine.estimatedPageReads(query, keys: keys)
       if searches > 0 {
         Text("Uses about \(searches) SerpApi searches. Duffel and Aviasales searches are free.")
+      } else if pages > 0 {
+        Text("No-key mode: reads about \(pages) pages from Google Flights and Booking.com on this iPhone, two at a time.")
       } else {
         Text("Turn everything on to leave no deal unchecked.")
       }

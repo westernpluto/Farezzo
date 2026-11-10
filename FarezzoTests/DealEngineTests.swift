@@ -308,4 +308,19 @@ final class DealEngineTests: XCTestCase {
     XCTAssertTrue(BookingLink(label: "Google Flights", url: URL(string: "https://www.google.com/travel/flights/search?tfs=x")!).isGoogleFlights)
     XCTAssertFalse(BookingLink(label: "Aviasales", url: URL(string: "https://www.aviasales.com/search")!).isGoogleFlights)
   }
+
+  func testCompareLinksAddCopaForLatinAmerica() {
+    var query = SearchQuery()
+    query.departDate = Fmt.ymd.date(from: "2026-12-03")!
+    query.returnDate = Fmt.ymd.date(from: "2026-12-10")!
+    query.origin = Place(code: "MIA", name: "Miami", country: "United States", kind: .airport)
+    query.destination = Place(code: "PTY", name: "Tocumen", country: "Panama", kind: .airport)
+    let links = CompareLinks.links(for: query)
+    XCTAssertEqual(links.map(\.label), ["Skyscanner", "Kayak", "Copa Airlines"])
+    let copa = links.last!.url.absoluteString
+    XCTAssertTrue(copa.contains("area1=MIA") && copa.contains("area2=PTY") && copa.contains("date2=2026-12-10"))
+    XCTAssertTrue(links[1].url.absoluteString.hasPrefix("https://www.kayak.com/flights/MIA-PTY/2026-12-03/2026-12-10"))
+    query.destination = Place(code: "LHR", name: "Heathrow", country: "United Kingdom", kind: .airport)
+    XCTAssertFalse(CompareLinks.links(for: query).contains { $0.label == "Copa Airlines" })
+  }
 }

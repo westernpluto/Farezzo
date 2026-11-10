@@ -226,10 +226,27 @@ struct ResultsHeader: View {
           }
         }
       }
-      if session.query.mode.needsFlights, let skyscanner = Skyscanner.url(for: session.query) {
-        Link(destination: skyscanner) {
-          Label("Compare this search on Skyscanner", systemImage: "arrow.up.right.square")
-            .font(.subheadline)
+      if session.query.mode.needsFlights {
+        let links = CompareLinks.links(for: session.query)
+        if !links.isEmpty {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Also check").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            FlowLayout(spacing: 6) {
+              ForEach(links) { link in
+                Link(destination: link.url) {
+                  Label(link.label, systemImage: link.label.contains("Airlines") ? "airplane.circle" : "arrow.up.right.square")
+                    .font(.subheadline)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                }
+              }
+            }
+            if links.contains(where: { $0.label == "Copa Airlines" }) {
+              Text("Google Flights can miss Copa on some routes; its own site always has its fares.")
+                .font(.caption2).foregroundStyle(.tertiary)
+            }
+          }
         }
       }
       if let insights = session.insights {

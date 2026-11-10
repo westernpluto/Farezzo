@@ -22,12 +22,18 @@ struct FarezzoApp: App {
 
 struct RootView: View {
   @Environment(WatchStore.self) private var watches
+  @State private var searchPath = NavigationPath()
+  @State private var watchPath = NavigationPath()
 
   var body: some View {
     TabView {
-      NavigationStack { SearchView() }
+      NavigationStack(path: $searchPath) {
+        SearchView(path: $searchPath).appDestinations()
+      }
         .tabItem { Label("Search", systemImage: "magnifyingglass") }
-      NavigationStack { WatchlistView() }
+      NavigationStack(path: $watchPath) {
+        WatchlistView().appDestinations()
+      }
         .tabItem { Label("Watching", systemImage: "bell.badge") }
         .badge(watches.items.count)
       NavigationStack { SettingsView() }

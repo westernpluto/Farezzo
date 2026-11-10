@@ -259,7 +259,35 @@ struct BookingLink: Codable, Hashable, Identifiable {
   /// Some booking sites must be opened with a form POST (Google Flights' booking redirects).
   var postBody: String?
   var price: Double?
+  /// Google Flights: text that identifies the chosen flight in the results list ("at 9:26 AM
+  /// on", the airline), so the page can scroll to it, mark it and open it.
+  var highlight: [String]? = nil
   var id: String { label + url.absoluteString + (postBody ?? "") }
+
+  var isGoogleFlights: Bool {
+    (url.host?.contains("google.") ?? false) && url.path.contains("/travel/flights")
+  }
+
+  private static let clock: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(identifier: "UTC")!
+    formatter.dateFormat = "h:mm a"
+    return formatter
+  }()
+
+  /// How Google Flights describes this leg's times and airline in its results list.
+  static func highlightHints(for leg: FlightLeg) -> [String] {
+    var hints: [String] = []
+    if let departs = leg.departs { hints.append("at \(clock.string(from: departs)) on") }
+    if let arrives = leg.arrives { hints.append("at \(clock.string(from: arrives)) on") }
+    let airline = (leg.segments.first?.airline ?? "")
+      .components(separatedBy: ",").first?
+      .components(separatedBy: " and ").first?
+      .trimmingCharacters(in: .whitespaces) ?? ""
+    if !airline.isEmpty && airline != "Airline" { hints.append("with \(airline)") }
+    return hints
+  }
 }
 
 struct FlightOffer: Codable, Hashable, Identifiable {

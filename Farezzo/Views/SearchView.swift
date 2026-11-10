@@ -1,8 +1,42 @@
 import SwiftUI
 
+/// A search's results screen. The route owns the search, so the results stay put however
+/// often SwiftUI rebuilds the screen (opening a result used to start the search over).
 struct ResultsRoute: Hashable {
   let id = UUID()
+  let session: SearchSession
+
+  @MainActor init(query: SearchQuery) {
+    session = SearchSession(query: query)
+  }
+
+  static func == (lhs: ResultsRoute, rhs: ResultsRoute) -> Bool { lhs.id == rhs.id }
+  func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+/// One result's details.
+struct DetailRoute: Hashable {
+  let item: ResultItem
   let query: SearchQuery
+}
+
+struct WatchRoute: Hashable {
+  let id: UUID
+}
+
+extension View {
+  /// Every screen a tab's navigation stack can show, registered once at the stack's root.
+  func appDestinations() -> some View {
+    navigationDestination(for: ResultsRoute.self) { route in
+      ResultsView(session: route.session)
+    }
+    .navigationDestination(for: DetailRoute.self) { route in
+      ResultDetail(item: route.item, query: route.query)
+    }
+    .navigationDestination(for: WatchRoute.self) { route in
+      WatchDetail(id: route.id)
+    }
+  }
 }
 
 enum SearchStore {
@@ -36,7 +70,7 @@ struct SearchView: View {
 
   @State private var query = SearchStore.load()
   @State private var picking: Slot?
-  @State private var route: ResultsRoute?
+  @Binding var path: NavigationPath
   @State private var keys = APIKeys.load()
   @AppStorage("currency") private var currency = Locale.current.currency?.identifier ?? "USD"
   @AppStorage("region") private var region = (Locale.current.region?.identifier ?? "US").lowercased()
@@ -156,9 +190,6 @@ struct SearchView: View {
         if slot == .origin { query.origin = place } else { query.destination = place }
       }
     }
-    .navigationDestination(item: $route) { route in
-      ResultsView(query: route.query)
-    }
     .onChange(of: query) { _, newValue in SearchStore.save(newValue) }
     .onChange(of: query.mode) { _, mode in
       if mode.needsHotels && query.returnDate == nil { query.returnDate = Fmt.addDays(3, to: query.departDate) }
@@ -246,6 +277,6 @@ struct SearchView: View {
   private func search() {
     query.currency = currency
     query.region = region
-    route = ResultsRoute(query: query)
+    path.append(ResultsRoute(query: query))
   }
 }

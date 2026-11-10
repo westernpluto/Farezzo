@@ -14,9 +14,7 @@ struct WatchlistView: View {
         }
       }
       ForEach(store.items) { item in
-        NavigationLink {
-          WatchDetail(id: item.id)
-        } label: {
+        NavigationLink(value: WatchRoute(id: item.id)) {
           WatchRow(item: item, refreshing: store.refreshing.contains(item.id))
         }
       }
@@ -72,7 +70,6 @@ struct WatchDetail: View {
   let id: UUID
   @Environment(WatchStore.self) private var store
   @State private var targetText = ""
-  @State private var route: ResultsRoute?
 
   private var item: WatchedSearch? { store.items.first { $0.id == id } }
 
@@ -115,16 +112,13 @@ struct WatchDetail: View {
             Label(store.refreshing.contains(id) ? "Checking…" : "Check now", systemImage: "arrow.clockwise")
           }
           .disabled(store.refreshing.contains(id))
-          Button {
-            route = ResultsRoute(query: item.query)
-          } label: {
+          NavigationLink(value: ResultsRoute(query: item.query)) {
             Label("See all deals", systemImage: "list.bullet")
           }
         }
       }
       .navigationTitle(item.query.summary)
       .navigationBarTitleDisplayMode(.inline)
-      .navigationDestination(item: $route) { ResultsView(query: $0.query) }
       .onAppear {
         if let target = item.targetPrice { targetText = String(Int(target)) }
       }

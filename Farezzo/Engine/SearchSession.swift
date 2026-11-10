@@ -24,8 +24,20 @@ final class SearchSession {
   /// A site asked to confirm a person is there (no-key mode): the page to show them.
   var humanCheck: URL?
 
+  private var searchTask: Task<Void, Never>?
+
   init(query: SearchQuery) {
     self.query = query
+  }
+
+  /// Starts the search once. It runs on its own task, so leaving the screen (to open a result)
+  /// doesn't cancel it, and coming back doesn't start it again.
+  func startIfNeeded() {
+    guard phase == .idle, searchTask == nil else { return }
+    searchTask = Task { [weak self] in
+      await self?.run()
+      self?.searchTask = nil
+    }
   }
 
   var bestPrice: Double? {

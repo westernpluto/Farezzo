@@ -30,7 +30,7 @@ enum HotelSort: String, CaseIterable, Identifiable {
 }
 
 struct ResultsView: View {
-  @State private var session: SearchSession
+  let session: SearchSession
   @State private var tab: ResultTab
   @State private var selection: ResultItem?
   @State private var flightSort: FlightSort = .price
@@ -39,9 +39,9 @@ struct ResultsView: View {
   @State private var hideCached = false
   @Environment(WatchStore.self) private var watches
 
-  init(query: SearchQuery) {
-    _session = State(initialValue: SearchSession(query: query))
-    switch query.mode {
+  init(session: SearchSession) {
+    self.session = session
+    switch session.query.mode {
     case .flights: _tab = State(initialValue: .flights)
     case .hotels: _tab = State(initialValue: .hotels)
     case .package: _tab = State(initialValue: .packages)
@@ -57,11 +57,9 @@ struct ResultsView: View {
     .navigationTitle(session.query.summary)
     .navigationBarTitleDisplayMode(.inline)
     .toolbar { toolbar }
-    .navigationDestination(for: ResultItem.self) { item in
-      ResultDetail(item: item, query: session.query)
-    }
-    .task {
-      if session.phase == .idle { await session.run() }
+    .onAppear {
+      session.startIfNeeded()
+      if selection == nil && session.phase == .done { selection = items.first }
     }
     .onChange(of: session.phase) { _, phase in
       if phase == .done { selection = items.first }
@@ -92,7 +90,7 @@ struct ResultsView: View {
               .buttonStyle(.plain)
               .listRowBackground(selection?.id == item.id ? Color.accentColor.opacity(0.14) : nil)
           } else {
-            NavigationLink(value: item) { ResultRow(item: item, query: session.query) }
+            NavigationLink(value: DetailRoute(item: item, query: session.query)) { ResultRow(item: item, query: session.query) }
           }
         }
       } header: {

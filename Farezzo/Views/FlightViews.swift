@@ -294,7 +294,16 @@ struct BookingSection: View {
 
   private func linkRow(_ link: BookingLink, highlight: Bool) -> some View {
     Button {
-      if link.postBody != nil { web = link } else { openURL(link.url) }
+      if link.isGoogleFlights {
+        // Opened in the app so Farezzo can find this flight in Google's list and open it.
+        var marked = link
+        marked.highlight = BookingLink.highlightHints(for: offer.outbound)
+        web = marked
+      } else if link.postBody != nil {
+        web = link
+      } else {
+        openURL(link.url)
+      }
     } label: {
       HStack {
         Image(systemName: highlight ? "checkmark.seal.fill" : "arrow.up.right.square")

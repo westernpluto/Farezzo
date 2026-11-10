@@ -44,7 +44,7 @@ final class WebPageReader: NSObject {
   /// Loads `url`, waits until `ready` (a script returning true/false) passes or `timeout`
   /// runs out, optionally runs `expand` (e.g. "show more results") and waits a moment, then
   /// returns what `extract` (a script returning a JSON string) finds.
-  func read(_ url: URL, ready: String, extract: String, expand: String? = nil, timeout: TimeInterval = 25) async throws -> JSONValue {
+  func read(_ url: URL, ready: String, extract: String, expand: String? = nil, timeout: TimeInterval = 40) async throws -> JSONValue {
     await acquire()
     defer { release() }
     await prepareCookies()

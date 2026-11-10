@@ -296,4 +296,16 @@ final class DealEngineTests: XCTestCase {
     XCTAssertEqual(parsed.leg.layovers.first?.minutes, 90)
     XCTAssertEqual(parsed.leg.airlines, ["Qatar Airways"])
   }
+
+  func testGoogleFlightsHighlightUsesGooglesWording() throws {
+    let day = try XCTUnwrap(Fmt.ymd.date(from: "2026-12-03"))
+    let label = "From 1126 US dollars round trip total. 1 stop flight with Qatar Airways. Leaves John F. Kennedy International Airport at 10:30\u{202F}AM on Thursday, December 3 and arrives at I Gusti Ngurah Rai International Airport at 10:40\u{202F}PM on Friday, December 4. Total duration 23 hr 10 min. Select flight"
+    let parsed = try XCTUnwrap(GoogleFlightsWeb.parseItem(label: label, text: "JFK–DPS", logo: nil, searchDate: day))
+    let hints = BookingLink.highlightHints(for: parsed.leg)
+    XCTAssertEqual(hints, ["at 10:30 AM on", "at 10:40 PM on", "with Qatar Airways"])
+    let normalized = Rx.normalizeSpaces(label).lowercased()
+    XCTAssertTrue(hints.allSatisfy { normalized.contains($0.lowercased()) })
+    XCTAssertTrue(BookingLink(label: "Google Flights", url: URL(string: "https://www.google.com/travel/flights/search?tfs=x")!).isGoogleFlights)
+    XCTAssertFalse(BookingLink(label: "Aviasales", url: URL(string: "https://www.aviasales.com/search")!).isGoogleFlights)
+  }
 }

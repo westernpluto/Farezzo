@@ -228,6 +228,12 @@ struct ResultsHeader: View {
           }
         }
       }
+      if session.query.mode.needsFlights, let skyscanner = Skyscanner.url(for: session.query) {
+        Link(destination: skyscanner) {
+          Label("Compare this search on Skyscanner", systemImage: "arrow.up.right.square")
+            .font(.subheadline)
+        }
+      }
       if let insights = session.insights {
         InsightBanner(insights: insights, currency: session.query.currency)
       }

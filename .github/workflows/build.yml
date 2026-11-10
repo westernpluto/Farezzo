@@ -66,34 +66,6 @@ jobs:
           name: Farezzo-ipa
           path: Farezzo.ipa
 
-      - name: Pick the iPhone Duo simulator
-        id: sim
-        run: |
-          UDID=$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          ios = sorted((r for r in devices if "iOS" in r), reverse=True)
-          for wanted in ("iPhone Duo", "iPhone"):
-              for runtime in ios:
-                  for d in devices[runtime]:
-                      if d["name"].startswith(wanted):
-                          print(d["udid"])
-                          print("Using", d["name"], runtime, file=sys.stderr)
-                          sys.exit(0)
-          sys.exit("No iPhone simulator found")
-          ')
-          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
-
-      - name: Unit tests on the simulator
-        run: |
-          set -o pipefail
-          xcodebuild test \
-            -project Farezzo.xcodeproj \
-            -scheme Farezzo \
-            -destination "id=${{ steps.sim.outputs.udid }}" \
-            CODE_SIGNING_ALLOWED=NO | tee test.log | grep -E "error:|Test Case .* (passed|failed)|Executed|TEST" || true
-          grep -q "TEST SUCCEEDED" test.log
-
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
         env:

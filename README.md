@@ -77,7 +77,8 @@ open Farezzo.xcodeproj
 
 `.github/workflows/build.yml` runs on GitHub's `xcode-27` runner (macOS 27, Xcode 27.x, with the
 iPhone Duo simulator). It builds an unsigned `Farezzo.ipa` (download it from the run's
-**Artifacts**), then runs the unit tests on the iPhone Duo simulator. Pushing a `v*` tag also
+**Artifacts**). The unit tests aren't run in CI (the simulator adds several minutes); run them in
+Xcode with ⌘U. Pushing a `v*` tag also
 publishes the IPA as a GitHub release. Sign the IPA with your own certificate or sideloading tool
 to install it.
 

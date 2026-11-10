@@ -276,9 +276,20 @@ struct BookingSection: View {
                                                           ret: offer.inbound?.departs.flatMap(Fmt.day(ofNaive:)) ?? offer.returnDate)),
                 highlight: false)
       }
+      linkRow(BookingLink(label: "Compare on Skyscanner", url: skyscannerURL), highlight: false)
       if let error { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
     }
     .sheet(item: $web) { BookingSheet(link: $0) }
+  }
+
+  /// These exact airports and dates on Skyscanner (falling back to the search's places).
+  private var skyscannerURL: URL {
+    let from = offer.outbound.fromCode.isEmpty ? query.origin.map(Skyscanner.code(for:)) ?? "" : offer.outbound.fromCode
+    let to = offer.outbound.toCode.isEmpty ? query.destination.map(Skyscanner.code(for:)) ?? "" : offer.outbound.toCode
+    return Skyscanner.url(from: from, to: to,
+                          depart: offer.outbound.departs.flatMap(Fmt.day(ofNaive:)) ?? offer.departDate,
+                          ret: offer.isRoundTrip ? (offer.inbound?.departs.flatMap(Fmt.day(ofNaive:)) ?? offer.returnDate) : nil,
+                          query: query)
   }
 
   private func linkRow(_ link: BookingLink, highlight: Bool) -> some View {

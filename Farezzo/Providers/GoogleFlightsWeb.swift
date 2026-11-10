@@ -176,8 +176,14 @@ enum GoogleFlightsWeb {
       if let found = Rx.match(#"Total duration ([0-9 hrmin]+)"#, label)?[1] { return Rx.minutes(found) }
       return Int(arrives.timeIntervalSince(departs) / 60)
     }()
-    let layovers = Rx.all(#"Layover \(\d+ of \d+\) is an? (.+?) (overnight )?layover at (.+?)\."#, label).map {
+    var layovers = Rx.all(#"Layover \(\d+ of \d+\) is an? (.+?) (overnight )?layover at (.+?)\."#, label).map {
       Layover(code: "", name: $0[3] ?? "", minutes: Rx.minutes($0[1] ?? ""), overnight: $0[2] != nil)
+    }
+    // The row shows the connecting airports' codes under the stop count ("1 hr 30 min DOH").
+    let lines = text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+    if let stopLine = lines.firstIndex(where: { Rx.match(#"^\d+ stops?$"#, $0) != nil }), stopLine + 1 < lines.count {
+      let layoverCodes = Rx.all(#"\b([A-Z]{3})\b"#, lines[stopLine + 1], caseSensitive: true).compactMap { $0[1] }
+      for (index, code) in layoverCodes.enumerated() where index < layovers.count { layovers[index].code = code }
     }
     let codes = Rx.match(#"\b([A-Z]{3}) ?[–-] ?([A-Z]{3})\b"#, text, caseSensitive: true)
     let airlineName = airlines.isEmpty ? "Airline" : airlines

@@ -28,7 +28,7 @@ enum BookingWeb {
     const t = document.body ? document.body.innerText : '';
     return document.querySelectorAll('[data-testid="property-card"]').length > 0
       || /No properties found|0 properties found/i.test(t)
-      || /Just a moment|are you a robot|verify you are human/i.test(document.title + ' ' + t.slice(0, 600));
+      || /Just a moment|are you a robot|verify you are human|detected as a robot|Access Forbidden/i.test(document.title + ' ' + t.slice(0, 600));
   })()
   """
 
@@ -52,7 +52,7 @@ enum BookingWeb {
         text: c.innerText || ''
       };
     });
-    const blocked = cards.length === 0 && /Just a moment|are you a robot|verify you are human/i.test(document.title + ' ' + body.slice(0, 600));
+    const blocked = cards.length === 0 && /Just a moment|are you a robot|verify you are human|detected as a robot|Access Forbidden/i.test(document.title + ' ' + body.slice(0, 600));
     return JSON.stringify({ items: cards, captcha: blocked, consent: false });
   })()
   """

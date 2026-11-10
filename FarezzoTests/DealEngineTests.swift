@@ -202,7 +202,7 @@ final class DealEngineTests: XCTestCase {
   func testGoogleFlightsPageRowParse() throws {
     let day = try XCTUnwrap(Fmt.ymd.date(from: "2026-12-01"))
     let label = "From 512 US dollars round trip total. 1 stop flight with Icelandair. Leaves John F. Kennedy International Airport at 8:00\u{202F}PM on Tuesday, December 1 and arrives at Heathrow Airport at 11:30\u{202F}AM on Wednesday, December 2. Total duration 10 hr 30 min. Layover (1 of 1) is a 1 hr 15 min layover at Keflavík International Airport in Reykjavík. Select flight"
-    let text = "8:00 PM – 11:30 AM+1\nIcelandair\n10 hr 30 min\nJFK–LHR\n1 stop\n$512\nround trip"
+    let text = "8:00 PM – 11:30 AM+1\nIcelandair\n10 hr 30 min\nJFK–LHR\n1 stop\n1 hr 15 min KEF\n$512\nround trip"
     let parsed = try XCTUnwrap(GoogleFlightsWeb.parseItem(label: label, text: text, logo: nil, searchDate: day))
     XCTAssertEqual(parsed.price, 512)
     XCTAssertEqual(parsed.leg.stops, 1)
@@ -210,6 +210,7 @@ final class DealEngineTests: XCTestCase {
     XCTAssertEqual(parsed.leg.toCode, "LHR")
     XCTAssertEqual(parsed.leg.durationMinutes, 630)
     XCTAssertEqual(parsed.leg.layovers.first?.minutes, 75)
+    XCTAssertEqual(parsed.leg.layovers.first?.code, "KEF")
     XCTAssertEqual(parsed.leg.airlines, ["Icelandair"])
     let departs = try XCTUnwrap(parsed.leg.departs)
     XCTAssertEqual(Fmt.utcCalendar.component(.hour, from: departs), 20)
@@ -278,5 +279,21 @@ final class DealEngineTests: XCTestCase {
     let withKey = APIKeys(serpApi: "k", duffel: nil, travelpayouts: nil, webMode: true)
     XCTAssertFalse(withKey.usesWebMode)
     XCTAssertEqual(DealEngine.estimatedPageReads(query, keys: withKey), 0)
+  }
+
+  /// A row exactly as Google Flights served it (checked against the live page, Nov 2026).
+  func testRealGoogleFlightsRow() throws {
+    let day = try XCTUnwrap(Fmt.ymd.date(from: "2026-12-03"))
+    let label = "From 1126 US dollars round trip total. 1 stop flight with Qatar Airways. Leaves John F. Kennedy International Airport at 10:30\u{202F}AM on Thursday, December 3 and arrives at I Gusti Ngurah Rai International Airport at 10:40\u{202F}PM on Friday, December 4. Total duration 23 hr 10 min.  Layover (1 of 1) is a 1 hr 30 min layover at Hamad International Airport in Doha. Select flight"
+    let text = "10:30\u{202F}AM\n – \n10:40\u{202F}PM+1\nQatar AirwaysAmerican, Alaska\n23 hr 10 min\nJFK–DPS\n1 stop\n1 hr 30 min DOH\n1,212 kg CO2e\nAvg emissions\n$1,126\nround trip"
+    let parsed = try XCTUnwrap(GoogleFlightsWeb.parseItem(label: label, text: text, logo: nil, searchDate: day))
+    XCTAssertEqual(parsed.price, 1126)
+    XCTAssertEqual(parsed.leg.fromCode, "JFK")
+    XCTAssertEqual(parsed.leg.toCode, "DPS")
+    XCTAssertEqual(parsed.leg.stops, 1)
+    XCTAssertEqual(parsed.leg.durationMinutes, 1390)
+    XCTAssertEqual(parsed.leg.layovers.first?.code, "DOH")
+    XCTAssertEqual(parsed.leg.layovers.first?.minutes, 90)
+    XCTAssertEqual(parsed.leg.airlines, ["Qatar Airways"])
   }
 }

@@ -1,0 +1,101 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # GitHub names macOS images after their Xcode version. `xcode-27` is the macOS 27 image
+    # (Apple silicon) with Xcode 27.x and the iPhone Duo simulator.
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick Xcode 27.1 or later
+        run: |
+          XCODE=/Applications/Xcode_27.1.app
+          [ -d "$XCODE" ] || XCODE="$(ls -d /Applications/Xcode_27.*.app 2>/dev/null | grep -viE 'beta|release_candidate|_rc' | sort -V | tail -1)"
+          [ -n "$XCODE" ] || XCODE=/Applications/Xcode.app
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iOS SDK $SDK"
+          if [ "$(printf '%s\n' 27.1 "$SDK" | sort -V | head -1)" != "27.1" ]; then
+            echo "::warning::iOS SDK $SDK is older than 27.1: the app won't fill iPhone Duo's displays."
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="1.0.$GITHUB_RUN_NUMBER"; fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: Build unsigned IPA
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Farezzo.xcodeproj \
+            -scheme Farezzo \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO | tee build.log | grep -E "error:|warning: .*deprecated|BUILD" || true
+          test -d build/Build/Products/Release-iphoneos/Farezzo.app || { grep -E "error:" build.log | head -50; exit 1; }
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Farezzo.app Payload/
+          zip -qry Farezzo.ipa Payload
+          ls -lh Farezzo.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Farezzo-ipa
+          path: Farezzo.ipa
+
+      - name: Pick the iPhone Duo simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          ios = sorted((r for r in devices if "iOS" in r), reverse=True)
+          for wanted in ("iPhone Duo", "iPhone"):
+              for runtime in ios:
+                  for d in devices[runtime]:
+                      if d["name"].startswith(wanted):
+                          print(d["udid"])
+                          print("Using", d["name"], runtime, file=sys.stderr)
+                          sys.exit(0)
+          sys.exit("No iPhone simulator found")
+          ')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Unit tests on the simulator
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Farezzo.xcodeproj \
+            -scheme Farezzo \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO | tee test.log | grep -E "error:|Test Case .* (passed|failed)|Executed|TEST" || true
+          grep -q "TEST SUCCEEDED" test.log
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" Farezzo.ipa --title "Farezzo $VERSION" --generate-notes

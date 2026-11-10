@@ -1,0 +1,77 @@
+# XcodeGen spec. Generate the Xcode project with:  xcodegen generate
+# Build with Xcode 27.1 or later (iOS 27.1 SDK) so the app fills both iPhone Duo displays and can
+# lay its two columns out around the fold.
+name: Farezzo
+options:
+  bundleIdPrefix: com.farezzo
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  Farezzo:
+    type: application
+    platform: iOS
+    sources:
+      - path: Farezzo
+    info:
+      path: Farezzo/Info.plist
+      properties:
+        CFBundleDisplayName: Farezzo
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # Layout follows the window's size, so every orientation and the iPhone Duo's inner
+        # display (which ignores orientation locks) are supported.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Price watches are re-checked in the background.
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.farezzo.watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.farezzo.app
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  FarezzoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: FarezzoTests
+    dependencies:
+      - target: Farezzo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.farezzo.tests
+
+schemes:
+  Farezzo:
+    build:
+      targets:
+        Farezzo: all
+        FarezzoTests: [test]
+    test:
+      targets:
+        - FarezzoTests
